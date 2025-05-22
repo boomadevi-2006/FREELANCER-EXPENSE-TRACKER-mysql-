@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Expense Tracker</a>
+      <div class="collapse navbar-collapse justify-content-end">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link active" href="dashboard.html">Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-danger" href="#" onclick="logout()">Logout</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="container mt-4">
+    <h2>Add Expense</h2>
+    <form id="expenseForm" class="mb-4 p-3 bg-white rounded shadow-sm">
+      <div class="row g-2">
+        <div class="col-md-3">
+          <input class="form-control" type="text" id="title" placeholder="Title" required>
+        </div>
+        <div class="col-md-2">
+          <input class="form-control" type="number" id="amount" placeholder="Amount" required>
+        </div>
+        <div class="col-md-3">
+          <input class="form-control" type="text" id="category" placeholder="Category" required>
+        </div>
+        <div class="col-md-3">
+          <input class="form-control" type="date" id="date" required>
+        </div>
+        <div class="col-md-1">
+          <button class="btn btn-success w-100" type="submit">Add</button>
+        </div>
+      </div>
+    </form>
+
+    <h3 class="mb-3">My Expenses</h3>
+    <ul id="expenseList" class="list-group mb-5 shadow-sm"></ul>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form class="modal-content" id="editForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Expense</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editId">
+          <div class="mb-3">
+            <label>Title</label>
+            <input type="text" id="editTitle" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label>Amount</label>
+            <input type="number" id="editAmount" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label>Category</label>
+            <input type="text" id="editCategory" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label>Date</label>
+            <input type="date" id="editDate" class="form-control" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" type="submit">Update</button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Logs Table -->
+  <div class="container mt-5">
+    <h4 class="mb-3">Previous Expense Updates</h4>
+    <table class="table table-bordered" id="logsTable">
+      <thead class="table-dark">
+        <tr>
+          <th>Old Title</th>
+          <th>Old Amount</th>
+          <th>Old Category</th>
+          <th>Old Date</th>
+          <th>Updated At</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const userId = localStorage.getItem("userId");
+
+    function logout() {
+      if (confirm("Are you sure you want to log out?")) {
+        localStorage.removeItem("userId");
+        window.location.href = "index.html";
+      }
+    }
+
+    async function fetchExpenseUpdateLogs() {
+      if (!userId) return;
+
+      try {
+        const res = await fetch(`http://localhost:3000/api/expense-update-logs/${userId}`);
+        const logs = await res.json();
+        const tbody = document.querySelector("#logsTable tbody");
+        tbody.innerHTML = "";
+
+        if (logs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="text-center">No logs found</td></tr>`;
+          return;
+        }
+
+        logs.forEach(log => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${log.old_title}</td>
+            <td>${log.old_amount}</td>
+            <td>${log.old_category}</td>
+            <td>${log.old_date}</td>
+            <td>${new Date(log.updated_at).toLocaleString()}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error("Failed to fetch update logs:", err);
+      }
+    }
+
+    document.getElementById("expenseForm").onsubmit = async function (e) {
+      e.preventDefault();
+
+      const title = document.getElementById("title").value;
+      const amount = document.getElementById("amount").value;
+      const category = document.getElementById("category").value;
+      const date = document.getElementById("date").value;
+
+      try {
+        const response = await fetch("http://localhost:3000/api/expense", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, title, amount, category, date })
+        });
+
+        const data = await response.json();
+        if (response.status === 201) {
+          alert("Expense added successfully!");
+          document.getElementById("expenseForm").reset();
+          loadExpenses();
+        } else {
+          alert("Error adding expense: " + data.message);
+        }
+      } catch (error) {
+        console.error("Error adding expense:", error);
+        alert("Something went wrong. Please try again.");
+      }
+    };
+
+    async function loadExpenses() {
+      try {
+        const res = await fetch(`http://localhost:3000/api/expenses/${userId}`);
+        const expenses = await res.json();
+        const list = document.getElementById("expenseList");
+        list.innerHTML = "";
+
+        if (expenses.length === 0) {
+          list.innerHTML = `<li class="list-group-item text-muted">No expenses found.</li>`;
+          return;
+        }
+
+        expenses.forEach(exp => {
+          const formattedDate = new Date(exp.date).toLocaleDateString();
+          list.innerHTML += `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                <strong>${exp.title}</strong> (${exp.category})<br>
+                <small>${formattedDate}</small>
+              </div>
+              <div>
+                <span class="badge bg-primary rounded-pill me-2">₹${parseFloat(exp.amount).toFixed(2)}</span>
+                <button class="btn btn-sm btn-outline-secondary me-1" onclick='openEditModal(${JSON.stringify(exp)})'>Edit</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteExpense(${exp.id})">Delete</button>
+              </div>
+            </li>
+          `;
+        });
+      } catch (error) {
+        console.error("Error loading expenses:", error);
+        alert("Failed to load expenses.");
+      }
+    }
+
+    async function deleteExpense(id) {
+      if (!confirm("Are you sure you want to delete this expense?")) return;
+
+      try {
+        const res = await fetch(`http://localhost:3000/api/expense/${id}`, {
+          method: "DELETE"
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert("Expense deleted successfully.");
+          loadExpenses();
+        } else {
+          alert("Failed to delete: " + data.message);
+        }
+      } catch (err) {
+        console.error("Error deleting:", err);
+        alert("Server error.");
+      }
+    }
+
+    function openEditModal(expense) {
+      document.getElementById("editId").value = expense.id;
+      document.getElementById("editTitle").value = expense.title;
+      document.getElementById("editAmount").value = expense.amount;
+      document.getElementById("editCategory").value = expense.category;
+      document.getElementById("editDate").value = expense.date.split("T")[0];
+      new bootstrap.Modal(document.getElementById("editModal")).show();
+    }
+
+    document.getElementById("editForm").onsubmit = async function (e) {
+      e.preventDefault();
+
+      const id = document.getElementById("editId").value;
+      const title = document.getElementById("editTitle").value;
+      const amount = document.getElementById("editAmount").value;
+      const category = document.getElementById("editCategory").value;
+      const date = document.getElementById("editDate").value;
+
+      try {
+        const res = await fetch(`http://localhost:3000/api/expense/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, amount, category, date })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert("Expense updated successfully.");
+          bootstrap.Modal.getInstance(document.getElementById("editModal")).hide();
+          loadExpenses();
+          fetchExpenseUpdateLogs();
+        } else {
+          alert("Update failed: " + data.message);
+        }
+      } catch (err) {
+        console.error("Error updating:", err);
+        alert("Server error.");
+      }
+    };
+
+    // Load data on page load
+    window.onload = () => {
+      loadExpenses();
+      fetchExpenseUpdateLogs();
+    };
+  </script>
+</body>
+</html>
